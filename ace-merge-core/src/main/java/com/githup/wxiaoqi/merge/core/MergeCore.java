@@ -59,7 +59,7 @@ public class MergeCore {
                     return proceed;
                 }
             }catch (Exception e){
-
+                log.error("某属性数据聚合失败", e);
             }
             // 获取当前方法的返回值
             Type parameterizedType =  m.getGenericReturnType();
@@ -88,7 +88,7 @@ public class MergeCore {
     public void mergeResult(Class clazz, List<?> result) throws ExecutionException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Field[] fields = clazz.getDeclaredFields();
         List<Field> mergeFields = new ArrayList<Field>();
-        Map<String, Map<String, Object>> invokes = new HashMap<>();
+        Map<String, Map<Object, Object>> invokes = new HashMap<>();
         String className = clazz.getName();
         Map<String,Field> fieldMaps= Arrays.asList(fields).stream().collect(Collectors.toMap(Field::getName, e -> e));
         Map<String, MergeField> mergeFieldMaps=new HashMap<String, MergeField>();
@@ -101,7 +101,7 @@ public class MergeCore {
                 mergeFields.add(field);
 
                 StringBuffer sb = new StringBuffer("");
-                List<String> ids = new ArrayList<>();
+                List<Object> ids = new ArrayList<>();
                 result.stream().forEach(obj -> {
                     Field f=fieldMaps.get(annotation.key());
                     f.setAccessible(true);
@@ -110,7 +110,7 @@ public class MergeCore {
                         o = f.get(obj);
                         if (o != null) {
                             if (!ids.contains(o)) {
-                                ids.add(o.toString());
+                                ids.add(o);
                                 sb.append(o.toString()).append(",");
                             }
                         }
@@ -124,12 +124,18 @@ public class MergeCore {
                 if(!annotation.requestType().isAssignableFrom(List.class)){
                     args = sb.substring(0, sb.length() - 1);
                 }else{
-                    args=ids;
+                    if(ids.size()>0) {
+                        args = ids;
+                    }else{
+                        args=null;
+                    }
                 }
-                Object bean = BeanFactoryUtils.getBean(annotation.service());
-                Method method = annotation.service().getMethod(annotation.method(),annotation.requestType());
-                Map<String, Object> value = (Map<String, Object>) method.invoke(bean, args);
-                invokes.put(field.getName(), value);
+                if(args!=null) {
+                    Object bean = BeanFactoryUtils.getBean(annotation.service());
+                    Method method = annotation.service().getMethod(annotation.method(), annotation.requestType());
+                    Map<Object, Object> value = (Map<Object, Object>) method.invoke(bean, args);
+                    invokes.put(field.getName(), value);
+                }
             }
         }
         result.stream().forEach(obj -> {
@@ -150,7 +156,7 @@ public class MergeCore {
     public void mergeOne(Class clazz, Object mergeObj) throws ExecutionException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         Field[] fields = clazz.getDeclaredFields();
         List<Field> mergeFields = new ArrayList<Field>();
-        Map<String, Map<String, Object>> invokes = new HashMap<>();
+        Map<String, Map<Object, Object>> invokes = new HashMap<>();
         String className = clazz.getName();
         Map<String,Field> fieldMaps= Arrays.asList(fields).stream().collect(Collectors.toMap(Field::getName, e -> e));
         Map<String, MergeField> mergeFieldMaps=new HashMap<String, MergeField>();
@@ -161,7 +167,7 @@ public class MergeCore {
                 mergeFieldMaps.put(field.getName(),annotation);
                 mergeFields.add(field);
                 Object args = annotation.key();
-                List<String> ids = new ArrayList<>();
+                List<Object> ids = new ArrayList<>();
                 Field f=fieldMaps.get(annotation.key());
                 f.setAccessible(true);
                 Object o = null;
@@ -175,15 +181,20 @@ public class MergeCore {
                     if(!annotation.requestType().isAssignableFrom(List.class)) {
                         args = o.toString();
                     }else{
-                        ids.add(o.toString());
-                        args = ids;
+                        ids.add(o);
+                        if(ids.size()>0) {
+                            args = ids;
+                        }else{
+                            args=null;
+                        }
                     }
                 }
-
-                Object bean = BeanFactoryUtils.getBean(annotation.service());
-                Method method = annotation.service().getMethod(annotation.method(),annotation.requestType());
-                Map<String, Object> value = (Map<String, Object>) method.invoke(bean, args);
-                invokes.put(field.getName(), value);
+                if(args!=null) {
+                    Object bean = BeanFactoryUtils.getBean(annotation.service());
+                    Method method = annotation.service().getMethod(annotation.method(), annotation.requestType());
+                    Map<Object, Object> value = (Map<Object, Object>) method.invoke(bean, args);
+                    invokes.put(field.getName(), value);
+                }
             }
         }
         mergeObjFieldValue(mergeObj, mergeFields, invokes,fieldMaps,mergeFieldMaps);
@@ -195,7 +206,7 @@ public class MergeCore {
      * @param mergeFields
      * @param invokes
      */
-    private void mergeObjFieldValue(Object mergeObj, List<Field> mergeFields, Map<String, Map<String, Object>> invokes,Map<String,Field> fieldMaps,Map<String, MergeField> mergeFieldMaps) {
+    private void mergeObjFieldValue(Object mergeObj, List<Field> mergeFields, Map<String, Map<Object, Object>> invokes,Map<String,Field> fieldMaps,Map<String, MergeField> mergeFieldMaps) {
         for (Field field : mergeFields) {
             field.setAccessible(true);
             Object o = null;
@@ -204,8 +215,11 @@ public class MergeCore {
                 MergeField annotation=mergeFieldMaps.get(field.getName());
                 Field f=fieldMaps.get(annotation.key());
                 Object value=f.get(mergeObj);
-                if (invokes.get(field.getName()).containsKey(value)) {
-                    field.set(mergeObj, invokes.get(field.getName()).get(value));
+                if(value!=null) {
+                    String valueStr = value.toString();
+                    if (invokes.get(field.getName()).containsKey(valueStr)) {
+                        field.set(mergeObj, invokes.get(field.getName()).get(valueStr));
+                    }
                 }
             } catch (IllegalAccessException e) {
                 log.error("数据属性加工失败:" + field, e);
