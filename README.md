@@ -16,7 +16,7 @@ Spring Cloud 跨服务数据聚合框架
 ## Maven添加依赖
 ```
 <dependency>
-    <groupId>com.github.wxiaoqi</groupId>
+    <groupId>com.githup.wxiaoqi</groupId>
     <artifactId>ace-merge-core</artifactId>
     <version>2.0-SNAPSHOT</version>
 </dependency>
